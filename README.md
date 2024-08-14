@@ -9,10 +9,11 @@ Large language models (LLMs) such as Generative Pre-trained Transformer 4 (GPT-4
 ## Code
 
 All analyses were done with R v4.3.2. The analyses and figures in the manuscript could be reproduced by running the script [classifier.Rmd](classifier.Rmd).
-* Figures 2a-d: [all_confusion_matrix.svg](output/all_confusion_matrix.svg)
-* Figure 2e: [both_mean_roc.svg](output/both_mean_roc.svg)
-* Extended data Figure 1a: [all_confusion_matrix.svg](output/all_confusion_matrix.svg)
-* Extended data Figure 1b: [gpt4-vs-naive.svg](output/gpt4-vs-naive.svg)
+* Figure 2a: [all_confusion_matrix.svg](output/all_confusion_matrix.svg)
+* Figure 2b: [both_mean_roc.svg](output/both_mean_roc.svg)
+* Supp. Figure 1: [90sensitivity_confusion_matrix.svg](output/90sensitivity_confusion_matrix.svg)
+* Supp. Figure 2a: [all_confusion_matrix.svg](output/all_confusion_matrix.svg)
+* Supp. Figure 2b: [gpt4-vs-naive.svg](output/gpt4-vs-naive.svg)
 
 The 5-fold cross-validation results are available in [classifier_5fold_CV.csv](output/classifier_5fold_CV.csv). This file can also be reproduced by the script [classifier.Rmd](classifier.Rmd).
 

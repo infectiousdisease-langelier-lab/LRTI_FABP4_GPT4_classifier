@@ -718,6 +718,71 @@ ggsave(
   width=2.7, height=2.7, units="in")
 ```
 
+# Specificity at 90% sensitivity
+
+Here I test the various classifiers to achieve 90% sensitivity
+
+```{r}
+roc.temp <- pROC::roc(
+    cv.folds$LRTI ~ cv.folds$mod2.prob,
+    levels=c("0","1"),
+    direction="<",
+    plot=TRUE, print.auc=TRUE)
+print(pROC::coords(
+  roc.temp,
+  x=0.9,
+  input="sensitivity",
+  ret=c("specificity","threshold")
+))
+```
+
+I will need to manually calculate the specificity at 90% sensitivity
+
+```{r}
+print(pROC::coords(
+  roc.temp,
+  x=c(0.1,0.2,0.3,0.4),
+  input="threshold",
+  ret=c("threshold","sensitivity","specificity")
+))
+```
+
+```{r}
+temp <- cv.folds %>%
+  select(patient_id, LRTI, mod2.prob) %>%
+  mutate(pred=as.factor(mod2.prob>=0.3)) %>%
+  group_by(pred, LRTI) %>%
+  summarise(count = n(), .groups = 'drop')
+print(temp)
+```
+
+```{r}
+p2 <- ggplot(
+  data=temp,
+  aes(x=pred, y=LRTI)) +
+  geom_tile(aes(fill=count), color="black") +
+  geom_text(aes(label=count), vjust = 0.5) +
+  labs(x="FABP4/GPT-4 prediction\nat \u226590% sensitivity",
+       y="True diagnosis") +
+  scale_fill_gradient(
+    low="white", high=color.integrated,
+    limits=c(3,46), guide="none") +
+  scale_x_discrete(
+    expand=c(0,0), limits=c("TRUE","FALSE"),
+    labels=c("LRTI","No LRTI"), position="top") +
+  scale_y_discrete(expand=c(0,0), labels=c("No LRTI","LRTI")) +
+  coord_fixed(ratio=1) +
+  theme_bw() + my.theme.cm
+p2
+```
+
+```{r}
+ggsave(
+  "output/90sensitivity_confusion_matrix.svg",
+  plot=p2,
+  width=3, height=2.3, units="in")
+```
+
 ## sessionInfo
 
 ```{r}
