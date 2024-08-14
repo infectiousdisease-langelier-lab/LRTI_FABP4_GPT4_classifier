@@ -1,4 +1,7 @@
-This is the repository for testing GPT-4 diagnosis of lower respiratory tract infection (LRTI) in critically ill patients, with and without the use of _FABP4_ gene biomarker.
+# Integrating a host gene biomarker with a large language model for diagnosis of lower respiratory tract infection
+
+Authors: &dagger;Hoang Van Phan, &dagger;Natasha Spottiswoode, Emily C. Lydon, Victoria T. Chu, Adolfo Cuesta, Alexander D. Kazberouk, Natalie L. Richmond, Carolyn S. Calfee, Charles R. Langelier<br>
+&dagger;equal contribution<br>
 
 ## Introduction
 
@@ -22,7 +25,7 @@ The 5-fold cross-validation results are available in [classifier_5fold_CV.csv](o
 ```
 R version 4.3.2 (2023-10-31)
 Platform: aarch64-apple-darwin20 (64-bit)
-Running under: macOS Sonoma 14.5
+Running under: macOS Sonoma 14.6.1
 
 Matrix products: default
 BLAS:   /System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/vecLib.framework/Versions/A/libBLAS.dylib 
@@ -38,23 +41,28 @@ attached base packages:
 [1] stats4    stats     graphics  grDevices utils     datasets  methods   base     
 
 other attached packages:
- [1] pROC_1.18.5                 DESeq2_1.42.1               SummarizedExperiment_1.32.0 Biobase_2.62.0              MatrixGenerics_1.14.0      
- [6] matrixStats_1.3.0           GenomicRanges_1.54.1        GenomeInfoDb_1.38.8         IRanges_2.36.0              S4Vectors_0.40.2           
-[11] BiocGenerics_0.48.1         patchwork_1.2.0             ggalluvial_0.12.5           lubridate_1.9.3             forcats_1.0.0              
-[16] stringr_1.5.1               dplyr_1.1.4                 purrr_1.0.2                 readr_2.1.5                 tidyr_1.3.1                
-[21] tibble_3.2.1                ggplot2_3.5.1               tidyverse_2.0.0            
+ [1] pROC_1.18.5                 DESeq2_1.42.1               SummarizedExperiment_1.32.0
+ [4] Biobase_2.62.0              MatrixGenerics_1.14.0       matrixStats_1.3.0          
+ [7] GenomicRanges_1.54.1        GenomeInfoDb_1.38.8         IRanges_2.36.0             
+[10] S4Vectors_0.40.2            BiocGenerics_0.48.1         patchwork_1.2.0            
+[13] ggalluvial_0.12.5           lubridate_1.9.3             forcats_1.0.0              
+[16] stringr_1.5.1               dplyr_1.1.4                 purrr_1.0.2                
+[19] readr_2.1.5                 tidyr_1.3.1                 tibble_3.2.1               
+[22] ggplot2_3.5.1               tidyverse_2.0.0            
 
 loaded via a namespace (and not attached):
- [1] tidyselect_1.2.1        vipor_0.4.7             farver_2.1.2            bitops_1.0-7            fastmap_1.2.0           RCurl_1.98-1.14        
- [7] pracma_2.4.4            digest_0.6.35           timechange_0.3.0        lifecycle_1.0.4         magrittr_2.0.3          compiler_4.3.2         
-[13] rlang_1.1.4             sass_0.4.9              tools_4.3.2             utf8_1.2.4              yaml_2.3.8              knitr_1.47             
-[19] S4Arrays_1.2.1          labeling_0.4.3          DelayedArray_0.28.0     plyr_1.8.9              abind_1.4-5             BiocParallel_1.36.0    
-[25] withr_3.0.0             grid_4.3.2              fansi_1.0.6             colorspace_2.1-0        scales_1.3.0            cli_3.6.2              
-[31] rmarkdown_2.27          crayon_1.5.2            ragg_1.3.2              generics_0.1.3          rstudioapi_0.16.0       tzdb_0.4.0             
-[37] ggbeeswarm_0.7.2        cachem_1.1.0            splines_4.3.2           zlibbioc_1.48.2         parallel_4.3.2          XVector_0.42.0         
-[43] vctrs_0.6.5             Matrix_1.6-5            jsonlite_1.8.8          hms_1.1.3               beeswarm_0.4.0          systemfonts_1.1.0      
-[49] locfit_1.5-9.9          jquerylib_0.1.4         glue_1.7.0              codetools_0.2-20        stringi_1.8.4           gtable_0.3.5           
-[55] munsell_0.5.1           pillar_1.9.0            htmltools_0.5.8.1       GenomeInfoDbData_1.2.11 R6_2.5.1                textshaping_0.4.0      
-[61] evaluate_0.23           lattice_0.22-6          bslib_0.7.0             Rcpp_1.0.12             svglite_2.1.3           nlme_3.1-164           
-[67] SparseArray_1.2.4       mgcv_1.9-1              xfun_0.44               pkgconfig_2.0.3        
+ [1] gtable_0.3.5            xfun_0.44               lattice_0.22-6          tzdb_0.4.0             
+ [5] vctrs_0.6.5             tools_4.3.2             bitops_1.0-7            generics_0.1.3         
+ [9] parallel_4.3.2          fansi_1.0.6             pkgconfig_2.0.3         Matrix_1.6-5           
+[13] lifecycle_1.0.4         GenomeInfoDbData_1.2.11 farver_2.1.2            compiler_4.3.2         
+[17] textshaping_0.4.0       munsell_0.5.1           codetools_0.2-20        RCurl_1.98-1.14        
+[21] pracma_2.4.4            pillar_1.9.0            crayon_1.5.2            BiocParallel_1.36.0    
+[25] DelayedArray_0.28.0     abind_1.4-5             nlme_3.1-164            locfit_1.5-9.9         
+[29] tidyselect_1.2.1        stringi_1.8.4           splines_4.3.2           labeling_0.4.3         
+[33] grid_4.3.2              colorspace_2.1-0        cli_3.6.2               SparseArray_1.2.4      
+[37] magrittr_2.0.3          S4Arrays_1.2.1          utf8_1.2.4              withr_3.0.0            
+[41] scales_1.3.0            timechange_0.3.0        XVector_0.42.0          ragg_1.3.2             
+[45] hms_1.1.3               knitr_1.47              mgcv_1.9-1              rlang_1.1.4            
+[49] Rcpp_1.0.12             glue_1.7.0              svglite_2.1.3           rstudioapi_0.16.0      
+[53] R6_2.5.1                plyr_1.8.9              systemfonts_1.1.0       zlibbioc_1.48.2   
 ```
