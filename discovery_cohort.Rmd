@@ -7,8 +7,7 @@ Here I will analyze mBAL data to test how well we can predict LRTI using FABP4
 and Versa.
 
 I will feed variance stabilization transformed FABP4 expression level, and Versa
-LRTI score (between 0 and 3) to a logistic regression model. I will try both Versa
-score as a factor and as a continuous variable.
+LRTI score (between 0 and 3) to a logistic regression model.
 
 # Load packages
 
@@ -77,7 +76,7 @@ sessionInfo()
 ```{r}
 # Counts
 counts.adult <- read.csv(
-  "./data/merged_counts.csv",
+  "./gene_counts/discovery_counts.csv",
   row.names=1, check.names=FALSE)
 # Save gene symbol and gene ID
 gene.symbol <- counts.adult[,"gene_symbol",drop=FALSE]
