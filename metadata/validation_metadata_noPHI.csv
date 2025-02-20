@@ -1,0 +1,67 @@
+"StudyID","Study","FINAL_LRTI_adj","COVID_Status","Versa.LRTI.score","Versa.LRTI.score.unredacted.notes","Clinical_LRTI"
+"1001","COMET","LRTI+C+M","COVID_Positive",3,2,"Y"
+"1002","COMET","LRTI+C+M","COVID_Positive",3,NA,"Y"
+"1010","COMET","LRTI+C+M","COVID_Negative",2,NA,"Y"
+"1016","COMET","No LRTI","COVID_Negative",3,NA,"N"
+"1024","COMET","LRTI+C+M","COVID_Positive",3,3,"Y"
+"1038","COMET","LRTI+C+M","COVID_Positive",3,3,"Y"
+"1047","COMET","LRTI+C+M","COVID_Positive",3,2,"Y"
+"1050","COMET","LRTI+C+M","COVID_Positive",3,3,"Y"
+"1051","COMET","LRTI+C+M","COVID_Positive",3,3,"Y"
+"1072","COMET","LRTI+C+M","COVID_Positive",NA,NA,NA
+"1078","COMET","LRTI+C+M","COVID_Positive",3,3,"Y"
+"1094","COMET","LRTI+C+M","COVID_Positive",3,3,"Y"
+"1107","COMET","LRTI+C+M","COVID_Positive",NA,NA,NA
+"1143","COMET","Unk_LRTI","COVID_Positive",NA,NA,NA
+"1145","COMET","LRTI+C+M","COVID_Positive",3,1,"Y"
+"1154","COMET","LRTI+C+M","COVID_Positive",3,2,"Y"
+"1162","COMET","LRTI+C+M","COVID_Positive",3,3,"Y"
+"1180","COMET","LRTI+C+M","COVID_Negative",NA,NA,NA
+"1188","COMET","LRTI+C+M","COVID_Positive",1,1,"Y"
+"1204","COMET","LRTI+C+M","COVID_Positive",2,1,"Y"
+"1223","COMET","LRTI+C+M","COVID_Positive",2,2,"Y"
+"1233","COMET","LRTI+C+M","COVID_Positive",3,1,"Y"
+"1234","COMET","No LRTI","COVID_Negative",3,NA,"N"
+"1238","COMET","LRTI+C+M","COVID_Positive",NA,NA,NA
+"1253","COMET","LRTI+C+M","COVID_Positive",3,3,"Y"
+"1273","COMET","No LRTI","COVID_Negative",0,NA,"N"
+"1276","COMET","LRTI+C+M","COVID_Positive",NA,NA,NA
+"1289","COMET","No LRTI","COVID_Negative",1,NA,"N"
+"1291","COMET","No LRTI","COVID_Negative",2,NA,"N"
+"1325","COMET","No LRTI","COVID_Negative",0,NA,"N"
+"1360","COMET","No LRTI","COVID_Negative",2,NA,"Y"
+"1364","COMET","No LRTI","COVID_Negative",2,NA,"N"
+"1365","COMET","LRTI+C","COVID_Positive",NA,NA,NA
+"1371","COMET","No LRTI","COVID_Negative",0,NA,"N"
+"1376","COMET","No LRTI","COVID_Negative",0,NA,"N"
+"1388","COMET","No LRTI","COVID_Negative",0,NA,"N"
+"1403","COMET","LRTI+C+M","COVID_Positive",3,2,"Y"
+"1408","COMET","LRTI+C+M","COVID_Negative",3,NA,"Y"
+"1410","COMET","LRTI+C+M","COVID_Positive",3,3,"Y"
+"1412","COMET","LRTI+C+M","COVID_Positive",NA,NA,NA
+"1430","COMET","No LRTI","COVID_Negative",0,NA,"N"
+"1432","COMET","No LRTI","COVID_Negative",0,NA,"Y"
+"1440","COMET","No LRTI","COVID_Negative",0,NA,"Y"
+"1447","COMET","No LRTI","COVID_Negative",1,NA,"Y"
+"1449","COMET","LRTI+C+M","COVID_Negative",3,NA,"Y"
+"1450","COMET","LRTI+C+M","COVID_Positive",3,3,"Y"
+"1471","COMET","LRTI+C+M","COVID_Positive",NA,NA,NA
+"1482","COMET","No LRTI","COVID_Negative",3,NA,"N"
+"1508","COMET","LRTI+C+M","COVID_Positive",NA,NA,NA
+"1519","COMET","LRTI+C+M","COVID_Positive",3,3,"Y"
+"1546","COMET","LRTI+C+M","COVID_Positive",3,3,"Y"
+"1548","COMET","LRTI+C+M","COVID_Positive",3,3,"Y"
+"1556","COMET","LRTI+C+M","COVID_Positive",NA,NA,NA
+"1563","COMET","No LRTI","COVID_Negative",NA,NA,NA
+"1598","COMET","No LRTI","COVID_Negative",1,NA,"N"
+"1615","COMET","LRTI+C+M","COVID_Negative",3,NA,"Y"
+"1624","COMET","No LRTI","COVID_Negative",NA,NA,NA
+"1628","COMET","No LRTI","COVID_Negative",0,NA,"Y"
+"1631","COMET","No LRTI","COVID_Negative",0,NA,"Y"
+"1633","COMET","No LRTI","COVID_Negative",0,NA,"N"
+"2143","EARLI","No LRTI","COVID_Negative",0,NA,"N"
+"2151","EARLI","No LRTI","COVID_Negative",1,NA,"Y"
+"2177","EARLI","No LRTI","COVID_Negative",0,NA,"N"
+"2193","EARLI","LRTI+C+M","COVID_Negative",NA,NA,NA
+"2197","EARLI","No LRTI","COVID_Negative",NA,NA,NA
+"2198","EARLI","No LRTI","COVID_Negative",NA,NA,NA
