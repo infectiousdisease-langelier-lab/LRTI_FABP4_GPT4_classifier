@@ -1,5 +1,5 @@
 ---
-title: "classifier"
+title: "FABP4-Versa_classifier"
 output: html_notebook
 ---
 
@@ -15,12 +15,14 @@ score as a factor and as a continuous variable.
 ```{r}
 library(tidyverse)
 library(ggplot2)
-library(ggalluvial)
 library(patchwork)
 
+# library(limma)
 library(DESeq2)
 
 library(pROC)
+
+which.script <- "discovery_cohort.Rmd"
 ```
 
 Specify ggplot2 theme
@@ -62,21 +64,27 @@ color.initial <- "#cc78bc"
 color.naive <- "#ece133"
 ```
 
-# Import mBAL data
+sessionInfo
 
-The count table was downloaded from https://github.com/infectiousdisease-langelier-lab/LRTI_FABP4_classifier/blob/main/adult_count/merged_counts.csv
+```{r}
+sessionInfo()
+```
+
+# Import data
+
+## Import count and metadata
 
 ```{r}
 # Counts
 counts.adult <- read.csv(
-  "merged_counts.csv",
+  "./data/merged_counts.csv",
   row.names=1, check.names=FALSE)
 # Save gene symbol and gene ID
 gene.symbol <- counts.adult[,"gene_symbol",drop=FALSE]
 
 # Metadata that contains Versa score
 metadata.adult <- read.csv(
-  "metadata/metadata_simplified.csv",
+  "./metadata/metadata_simplified.csv",
   row.names=NULL
 )
 colnames(metadata.adult) <- gsub(" ",".", colnames(metadata.adult), fixed=TRUE)
@@ -84,9 +92,11 @@ metadata.adult$patient_id <- as.character(metadata.adult$patient_id)
 metadata.adult$LRTI <- factor(metadata.adult$LRTI, levels=c(0,1))
 
 # Remove excluded and prompt engineering patients
+# Remove 361 and 506 due to QC
 metadata.adult <- metadata.adult %>%
   subset((is.na(Exclude.Patient)) | (Exclude.Patient!="Y")) %>%
-  subset(!(patient_id %in% c("205","208","211","213","439")))
+  subset(!(patient_id %in% c("205","208","211","213","439"))) %>%
+  subset(!(patient_id %in% c("361","506")))
 
 # Versa score is stored in 2 columns: 1 as character, 1 as numeric
 metadata.adult$Versa.LRTI.score.factor <- as.character(metadata.adult$Versa.LRTI.score)
@@ -115,7 +125,7 @@ The column `Clinical_LRTI` contains the real-time clinician adjudication, based 
 
 ```{r}
 initial.icu <- read.csv(
-  "metadata/initial_icu.csv",
+  "./metadata/initial_icu.csv",
   row.names=NULL
 )
 
@@ -137,16 +147,19 @@ stopifnot(!is.na(metadata.adult$Clinical_LRTI))
 metadata.adult$Clinical_LRTI <- factor(metadata.adult$Clinical_LRTI, levels=c(0,1))
 ```
 
-## Import GPT-4 comparison physician diagnosis
-
-Here we call GPT-4 comparison physicians "naive physicians" in short.
+## Import naive physician diagnosis
 
 ```{r}
 naive <- read.csv(
-  "metadata/gpt4_comparison_physician_score.csv",
+  "./metadata/gpt4_comparison_physician_score.csv",
   row.names=NULL
 )
 naive$LRTI <- as.character(naive$LRTI)
+naive$patient_id <- as.character(naive$patient_id)
+
+# Exclude patients 361 and 506 because of QC
+naive <- naive %>%
+  subset(!(patient_id %in% c("361","506")))
 ```
 
 # Initial ICU vs true diagnosis
@@ -182,44 +195,375 @@ p.initial <- ggplot(
 p.initial
 ```
 
-# Compare Versa GPT-4 vs true diagnosis
+# 5-fold CV
+## Generate 5 folds
 
-## GPT-4 vs true diagnosis
-
-Calculate the proportion of each adjudication by GPT-4 LRTI score
-
-```{r}
-# Number of patients per GPT-4 score and LRTI adjudication
-temp <- metadata.adult %>%
-  select(patient_id, LRTI, Versa.LRTI.score.factor) %>%
-  group_by(Versa.LRTI.score.factor, LRTI) %>%
-  summarise(count = n(), .groups = 'drop')
-print(temp)
-
-# Calculate proportion
-temp <- temp %>%
-  group_by(Versa.LRTI.score.factor) %>%
-  mutate(prop=count/sum(count)) %>%
-  ungroup()
-print(temp)
-```
-
-Plot LRTI vs GPT-4 score
+Here I generate 5 folds for cross-validation, trying to keep roughly the same ratio of LRTI to no LRTI cases
 
 ```{r}
-ggplot(data=temp,
-       aes(x=Versa.LRTI.score.factor, y=prop*100)) +
-  geom_col(aes(fill=LRTI), color="black", width=0.5) +
-  scale_fill_manual(
-    values=c("0"="#c7dde5", "1"="#c00000")) +
-  scale_y_continuous(
-    limits=c(0,100), expand=c(0,0)) +
-  labs(x="GPT-4 LRTI score",
-       y="Proportion of cases (%)") +
-  theme_bw() + my.theme
+# Create the 5 folds for each LRTI group separately
+rep0 <- rep(
+  1:5, length.out=sum(metadata.adult$LRTI=="0"))
+rep1 <- rep(
+  1:5, length.out=sum(metadata.adult$LRTI=="1"))
+
+# Assign fold
+set.seed(0)
+cv.folds <- metadata.adult %>%
+  select(patient_id,
+         LRTI, Versa.LRTI.score, Versa.LRTI.score.factor) %>%
+  mutate(fold=NA) %>%
+  arrange(patient_id)
+cv.folds[cv.folds$LRTI=="0","fold"] <- sample(rep0, replace=FALSE)
+cv.folds[cv.folds$LRTI=="1","fold"] <- sample(rep1, replace=FALSE)
+
+# Count number of LRTI samples per fold
+print(cv.folds %>%
+        group_by(fold) %>%
+        dplyr::count(LRTI)
+)
 ```
 
-### Confusion matrix
+```{r}
+# LRTI status vs Versa score
+# score 2 is missing in folds 1 and 4, the other 4 folds have all 4 scores
+print(cv.folds %>%
+        group_by(fold) %>%
+        dplyr::count(Versa.LRTI.score))
+```
+
+## Logistic regression classifier
+
+```{r}
+# Get ensembl ID of FABP4
+gene.id <- rownames(gene.symbol %>% subset(gene_symbol=="FABP4"))
+
+# For storing pROC::roc results
+gpt4.fold.roc.adult <- list() # GPT-4 only
+mod1.fold.roc.adult <- list() # FABP4 only
+mod2.fold.roc.adult <- list() # FABP4 + GPT-4
+
+# For storing vst level of FABP4
+cv.folds$FABP4.vst <- NA
+# For storing predicted probability from the 3 classifiers
+cv.folds$gpt4.prob <- NA
+cv.folds$mod1.prob <- NA
+cv.folds$mod2.prob <- NA
+
+# For storing cutoff value, TN, TP, FN, FP at the Youden's index
+gpt4.youden <- list()
+mod1.youden <- list()
+mod2.youden <- list()
+# # For storing cutoff value, sensitivity and specificity at 90% sensitivity
+# sens90 <- list()
+
+# Iterate through 5 folds
+for (k in c(1:5)) {
+  test.fold <- cv.folds[cv.folds$fold==k,]
+  train.folds <- cv.folds[cv.folds$fold!=k,]
+  
+  # Train data
+  counts.train <- counts.adult[,train.folds$patient_id]
+  keep.train <- rowSums(counts.train>=10) >= (0.2*ncol(counts.train))
+  dds.train <- DESeqDataSetFromMatrix(
+    countData = counts.train[keep.train,],
+    colData = train.folds,
+    design = ~1)
+  dds.train <- estimateSizeFactors(dds.train)
+  dds.train <- estimateDispersions(dds.train)
+  vsd.train <- varianceStabilizingTransformation(dds.train) %>% 
+    assay %>% 
+    round(., digits=2)
+  # Add FABP4 expression
+  train.folds$FABP4 <- vsd.train[gene.id,]
+  
+  # Fit logistic regression: GPT-4 only
+  gpt4.fit <- glm(
+    LRTI ~ Versa.LRTI.score,
+    data=train.folds,
+    family="binomial"
+  )
+  
+  # Fit logistic regression: FABP4 only
+  mod1.fit <- glm(
+    LRTI ~ FABP4,
+    data=train.folds,
+    family="binomial")
+  
+  # Fit logistic regression: FABP4 & GPT-4
+  mod2.fit <- glm(
+    LRTI ~ FABP4 + Versa.LRTI.score,
+    data=train.folds,
+    family="binomial")
+  
+  # Test data
+  counts.test <- counts.adult[,test.fold$patient_id]
+  dds.test <- DESeqDataSetFromMatrix(
+    countData = counts.test[keep.train,],
+    colData = test.fold,
+    design = ~1)
+  dds.test <- estimateSizeFactors(dds.test)
+  dispersionFunction(dds.test) <- dispersionFunction(dds.train) # assign the dispersion function from the training data directly
+  vsd.test <- varianceStabilizingTransformation(dds.test, blind=FALSE) %>% 
+    assay %>% 
+    round(., digits=2)
+  # Add FABP4 expression
+  test.fold$FABP4 <- vsd.test[gene.id,]
+  
+  # Calculate logistic regression's probability
+  test.fold$gpt4.prob <- predict(
+    gpt4.fit, newdata=test.fold, type="response")
+  test.fold$mod1.prob <- predict(
+    mod1.fit, newdata=test.fold, type="response")
+  test.fold$mod2.prob <- predict(
+    mod2.fit, newdata=test.fold, type="response")
+  
+  # Store vst level of FABP4
+  cv.folds[match(colnames(vsd.test),cv.folds$patient_id),"FABP4.vst"] <- vsd.test[gene.id,]
+  # Store probability
+  cv.folds[match(test.fold$patient_id,cv.folds$patient_id),"gpt4.prob"] <- test.fold$gpt4.prob
+  cv.folds[match(test.fold$patient_id,cv.folds$patient_id),"mod1.prob"] <- test.fold$mod1.prob
+  cv.folds[match(test.fold$patient_id,cv.folds$patient_id),"mod2.prob"] <- test.fold$mod2.prob
+  
+  # Calculate ROC curve
+  gpt4.fold.roc.adult[[k]] <- pROC::roc(
+    test.fold$LRTI ~ test.fold$gpt4.prob,
+    levels=c("0","1"),
+    direction="<",
+    plot=TRUE, print.auc=TRUE)
+  mod1.fold.roc.adult[[k]] <- pROC::roc(
+    test.fold$LRTI ~ test.fold$mod1.prob,
+    levels=c("0","1"),
+    direction="<",
+    plot=TRUE, print.auc=TRUE)
+  mod2.fold.roc.adult[[k]] <- pROC::roc(
+    test.fold$LRTI ~ test.fold$mod2.prob,
+    levels=c("0","1"),
+    direction="<",
+    plot=TRUE, print.auc=TRUE)
+  print(sprintf(
+    "Model 1: Fold %d AUC: %.3f", k, mod1.fold.roc.adult[[k]]$auc))
+  print(sprintf(
+    "Model 2: Fold %d AUC: %.3f", k, mod2.fold.roc.adult[[k]]$auc))
+  
+  # Youden's index
+  gpt4.youden[[k]] <- pROC::coords(
+    gpt4.fold.roc.adult[[k]],
+    x="best", best.method="youden",
+    ret=c("threshold","tn","tp","fn","fp")
+  )
+  mod1.youden[[k]] <- pROC::coords(
+    mod1.fold.roc.adult[[k]],
+    x="best", best.method="youden",
+    ret=c("threshold","tn","tp","fn","fp")
+  )
+  mod2.youden[[k]] <- pROC::coords(
+    mod2.fold.roc.adult[[k]],
+    x="best", best.method="youden",
+    ret=c("threshold","tn","tp","fn","fp")
+  )
+}
+```
+
+Calculate the mean and s.d. of the AUC
+
+```{r}
+# Get the list of AUCs
+gpt4.fold.auc.adult <- unlist(lapply(
+  gpt4.fold.roc.adult,
+  FUN=function(x) x$auc))
+mod1.fold.auc.adult <- unlist(lapply(
+  mod1.fold.roc.adult,
+  FUN=function(x) x$auc))
+mod2.fold.auc.adult <- unlist(lapply(
+  mod2.fold.roc.adult,
+  FUN=function(x) x$auc))
+
+# GPT-4 only
+# Mean
+print(mean(gpt4.fold.auc.adult))
+# SD
+print(sd(gpt4.fold.auc.adult))
+
+# Model 1
+# Mean
+print(mean(mod1.fold.auc.adult))
+# SD
+print(sd(mod1.fold.auc.adult))
+
+# Model 2
+# Mean
+print(mean(mod2.fold.auc.adult))
+# SD
+print(sd(mod2.fold.auc.adult))
+```
+
+One-sided t-test comparing AUCs
+
+```{r}
+print(t.test(
+  mod2.fold.auc.adult, mod1.fold.auc.adult,
+  paired=TRUE, alternative="greater"
+))
+
+print(t.test(
+  mod2.fold.auc.adult, gpt4.fold.auc.adult,
+  paired=TRUE, alternative="greater"
+))
+```
+
+Export
+
+```{r}
+write.csv(
+  cv.folds,
+  "./output/discovery_classifier_5fold_CV.csv",
+  row.names=FALSE
+)
+```
+
+## Mean ROC curve
+
+Interpolate the ROC to calculate the mean AUC, taking inspiration from https://stats.stackexchange.com/a/187003
+
+```{r}
+# Initialize data frame for storing interpolated TPR and FPR
+gpt4.roc.adult.approx <- data.frame(
+  fpr.out=seq(0, 1, length.out=100),
+  tpr1=0,
+  tpr2=0,
+  tpr3=0,
+  tpr4=0,
+  tpr5=0)
+mod1.roc.adult.approx <- gpt4.roc.adult.approx
+mod2.roc.adult.approx <- mod1.roc.adult.approx
+for (k in 1:5) {
+  # GPT-4 only
+  fpr <- rev(1-gpt4.fold.roc.adult[[k]]$specificities)
+  tpr <- rev(gpt4.fold.roc.adult[[k]]$sensitivities)
+  tpr.out <- approx(fpr, tpr,
+                    xout=gpt4.roc.adult.approx$fpr.out,
+                    method="linear", ties="ordered")
+  gpt4.roc.adult.approx[,k+1] <- tpr.out$y
+  
+  # Model 1
+  fpr <- rev(1-mod1.fold.roc.adult[[k]]$specificities)
+  tpr <- rev(mod1.fold.roc.adult[[k]]$sensitivities)
+  tpr.out <- approx(fpr, tpr,
+                    xout=mod1.roc.adult.approx$fpr.out,
+                    method="linear", ties="ordered")
+  mod1.roc.adult.approx[,k+1] <- tpr.out$y
+  
+  # Model 2
+  fpr <- rev(1-mod2.fold.roc.adult[[k]]$specificities)
+  tpr <- rev(mod2.fold.roc.adult[[k]]$sensitivities)
+  tpr.out <- approx(fpr, tpr,
+                    xout=mod2.roc.adult.approx$fpr.out,
+                    method="linear", ties="ordered")
+  mod2.roc.adult.approx[,k+1] <- tpr.out$y
+}
+```
+
+Calculate the average TPR and FPR
+
+```{r}
+# GPT-4 only
+gpt4.roc.adult.approx$tpr.mean <- rowMeans(gpt4.roc.adult.approx[,2:6])
+gpt4.roc.adult.approx$tpr.sd <- apply(
+  gpt4.roc.adult.approx[,2:6],
+  MARGIN=1, FUN=sd
+)
+
+gpt4.roc.adult.approx[1,"tpr.mean"] <- 0 # Force the mean ROC to start at (0,0)
+plot(gpt4.roc.adult.approx$fpr.out, gpt4.roc.adult.approx$tpr.mean,
+     main="GPT-4 only")
+
+# Model 1
+mod1.roc.adult.approx$tpr.mean <- rowMeans(mod1.roc.adult.approx[,2:6])
+mod1.roc.adult.approx$tpr.sd <- apply(
+  mod1.roc.adult.approx[,2:6],
+  MARGIN=1, FUN=sd
+)
+
+mod1.roc.adult.approx[1,"tpr.mean"] <- 0 # Force the mean ROC to start at (0,0)
+plot(mod1.roc.adult.approx$fpr.out, mod1.roc.adult.approx$tpr.mean,
+     main="Model 1: FABP4 only")
+
+# Model 2
+mod2.roc.adult.approx$tpr.mean <- rowMeans(mod2.roc.adult.approx[,2:6])
+mod2.roc.adult.approx$tpr.sd <- apply(
+  mod2.roc.adult.approx[,2:6],
+  MARGIN=1, FUN=sd
+)
+mod2.roc.adult.approx[1,"tpr.mean"] <- 0 # Force the mean ROC to start at (0,0)
+plot(mod2.roc.adult.approx$fpr.out, mod2.roc.adult.approx$tpr.mean,
+     main="Model 2: FABP4 & Versa")
+```
+
+Plot interpolated ROC
+
+```{r}
+p <- ggplot()
+
+# Model 1
+p <- p + geom_line(
+  data=mod1.roc.adult.approx,
+  aes(x=fpr.out, y=tpr.mean),
+  col=color.fabp4, linewidth=1)
+
+# Model 2
+p <- p + geom_line(
+  data=mod2.roc.adult.approx,
+  aes(x=fpr.out, y=tpr.mean),
+  col=color.integrated, linewidth=1)
+
+# GPT-4
+p <- p + geom_line(
+  data=gpt4.roc.adult.approx,
+  aes(x=fpr.out, y=tpr.mean),
+  col=color.gpt4, linewidth=1)
+
+# Add the diagonal line
+p <- p +
+  geom_segment(
+    aes(x=0,xend=1,y=0,yend=1),
+    linetype="dashed", col="grey50", linewidth=0.4)
+
+# Formatting
+p <- p +
+  labs(x="False positive rate\n(1 \u2212 specificity)",
+       y="True positive rate\n(sensitivity)") +
+  scale_x_continuous(limits=c(-0.03,1.03), expand=c(0,0)) +
+  scale_y_continuous(limits=c(-0.03,1.03), expand=c(0,0)) +
+  theme_bw() + 
+  theme(
+    plot.title = element_text(hjust = 0.5, size=12, face="plain"),
+    axis.text = element_text(size=12, color="black"),
+    text = element_text(size=12, family="Arial"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.margin = unit(c(0.3,1,0.7,0), "cm")
+  )
+p
+ggsave(
+  "./output/discovery_both_mean_roc.svg",
+  plot=p,
+  width=3.55, height=3.57, units="in")
+```
+
+## Youden's index
+
+Statistics at Youden's index
+
+```{r}
+print(bind_rows(gpt4.youden))
+print(bind_rows(mod1.youden))
+print(bind_rows(mod2.youden))
+```
+
+# Compare all predictions to true diagnosis
+
+## GPT-4
 
 Compare GPT-4 prediction to true diagnosis (threshold is LRTI score >=1)
 
@@ -255,375 +599,7 @@ p.gpt4 <- ggplot(
 p.gpt4
 ```
 
-### ROC curve
-
-```{r}
-# Calculate ROC curve
-gpt4 <- pROC::roc(
-    metadata.adult$LRTI ~ metadata.adult$Versa.LRTI.score,
-    levels=c("0","1"),
-    direction="<",
-    plot=TRUE, print.auc=TRUE)
-
-print(pracma::trapz(rev(1-gpt4$specificities), rev(gpt4$sensitivities)))
-```
-
-## GPT-4 accuracy vs word count
-
-There's no clear relationship between GPT-4 accuracy and notes' word count.
-
-```{r}
-ggplot(data=metadata.adult,
-       aes(x=Notes.word.count, y=accuracy)) +
-  geom_point() +
-  geom_smooth(method="lm") +
-  labs(x="Notes' word count", y="GPT-4 accuracy") +
-  theme_classic() + my.theme
-```
-
-# 5-fold CV
-## Generate 5 folds
-
-Here I generate 5 folds for cross-validation, trying to keep roughly the same ratio of LRTI to no LRTI cases
-
-```{r}
-# Create the 5 folds for each LRTI group separately
-rep0 <- rep(
-  1:5, length.out=sum(metadata.adult$LRTI=="0"))
-rep1 <- rep(
-  1:5, length.out=sum(metadata.adult$LRTI=="1"))
-
-# Assign fold
-set.seed(0)
-cv.folds <- metadata.adult %>%
-  select(patient_id, LRTI,
-        Versa.LRTI.score, Versa.LRTI.score.factor) %>%
-  mutate(fold=NA) %>%
-  arrange(patient_id)
-cv.folds[cv.folds$LRTI=="0","fold"] <- sample(rep0, replace=FALSE)
-cv.folds[cv.folds$LRTI=="1","fold"] <- sample(rep1, replace=FALSE)
-
-# Count number of LRTI samples per fold
-print(cv.folds %>%
-        group_by(fold) %>%
-        dplyr::count(LRTI)
-)
-```
-
-```{r}
-# LRTI status vs Versa score
-# score 2 is missing in folds 1 and 4, the other 4 folds have all 4 scores
-print(cv.folds %>%
-        group_by(fold) %>%
-        dplyr::count(Versa.LRTI.score))
-```
-
-## 5-fold CV logistic regression
-
-```{r}
-# Get ensembl ID of FABP4
-gene.id <- rownames(gene.symbol %>% subset(gene_symbol=="FABP4"))
-
-# For storing pROC::roc results
-mod1.fold.roc.adult <- list() # FABP4 only
-mod2.fold.roc.adult <- list() # FABP4 + Versa
-
-# For storing vst level of FABP4
-cv.folds$FABP4.vst <- NA
-# For storing predicted probability from the 2 classifiers
-cv.folds$mod1.prob <- NA
-cv.folds$mod2.prob <- NA
-
-# For storing cutoff value, sensitivity and specificity at the Youden's index
-mod1.youden <- list()
-mod2.youden <- list()
-
-# Iterate through 5 folds
-for (k in c(1:5)) {
-  test.fold <- cv.folds[cv.folds$fold==k,]
-  train.folds <- cv.folds[cv.folds$fold!=k,]
-  
-  # Train data
-  counts.train <- counts.adult[,train.folds$patient_id]
-  keep.train <- rowSums(counts.train>=10) >= (0.2*ncol(counts.train))
-  dds.train <- DESeqDataSetFromMatrix(
-    countData = counts.train[keep.train,],
-    colData = train.folds,
-    design = ~1)
-  dds.train <- estimateSizeFactors(dds.train)
-  dds.train <- estimateDispersions(dds.train)
-  vsd.train <- varianceStabilizingTransformation(dds.train) %>% 
-    assay %>% 
-    round(., digits=2)
-  # Add FABP4 expression
-  train.folds$FABP4 <- vsd.train[gene.id,]
-  
-  # Fit logistic regression: FABP4 only
-  mod1.fit <- glm(
-    LRTI ~ FABP4,
-    data=train.folds,
-    family="binomial")
-  
-  # Fit logistic regression: FABP4 & GPT-4
-  mod2.fit <- glm(
-    LRTI ~ FABP4 + Versa.LRTI.score,
-    data=train.folds,
-    family="binomial")
-  
-  # Test data
-  counts.test <- counts.adult[,test.fold$patient_id]
-  dds.test <- DESeqDataSetFromMatrix(
-    countData = counts.test[keep.train,],
-    colData = test.fold,
-    design = ~1)
-  dds.test <- estimateSizeFactors(dds.test)
-  dispersionFunction(dds.test) <- dispersionFunction(dds.train) # assign the dispersion function from the training data directly
-  vsd.test <- varianceStabilizingTransformation(dds.test, blind=FALSE) %>% 
-    assay %>% 
-    round(., digits=2)
-  # Add FABP4 expression
-  test.fold$FABP4 <- vsd.test[gene.id,]
-  
-  # Calculate logistic regression's probability
-  test.fold$mod1.prob <- predict(
-    mod1.fit, newdata=test.fold, type="response")
-  test.fold$mod2.prob <- predict(
-    mod2.fit, newdata=test.fold, type="response")
-  
-  # Store vst level of FABP4
-  cv.folds[match(colnames(vsd.test),cv.folds$patient_id),"FABP4.vst"] <- vsd.test[gene.id,]
-  # Store probability
-  cv.folds[match(test.fold$patient_id,cv.folds$patient_id),"mod1.prob"] <- test.fold$mod1.prob
-  cv.folds[match(test.fold$patient_id,cv.folds$patient_id),"mod2.prob"] <- test.fold$mod2.prob
-  
-  # Calculate ROC curve
-  mod1.fold.roc.adult[[k]] <- pROC::roc(
-    test.fold$LRTI ~ test.fold$mod1.prob,
-    levels=c("0","1"),
-    direction="<",
-    plot=TRUE, print.auc=TRUE)
-  mod2.fold.roc.adult[[k]] <- pROC::roc(
-    test.fold$LRTI ~ test.fold$mod2.prob,
-    levels=c("0","1"),
-    direction="<",
-    plot=TRUE, print.auc=TRUE)
-  print(sprintf(
-    "Model 1: Fold %d AUC: %.3f", k, mod1.fold.roc.adult[[k]]$auc))
-  print(sprintf(
-    "Model 2: Fold %d AUC: %.3f", k, mod2.fold.roc.adult[[k]]$auc))
-  
-  # Youden's index
-  mod1.youden[[k]] <- pROC::coords(
-    mod1.fold.roc.adult[[k]],
-    x="best", best.method="youden",
-    ret=c("threshold","sensitivity","specificity","accuracy")
-  )
-  mod2.youden[[k]] <- pROC::coords(
-    mod2.fold.roc.adult[[k]],
-    x="best", best.method="youden",
-    ret=c("threshold","sensitivity","specificity","accuracy")
-  )
-}
-```
-
-Calculate the mean and s.d. of the AUCs.
-
-```{r}
-# Get the list of AUCs
-mod1.fold.auc.adult <- unlist(lapply(
-  mod1.fold.roc.adult,
-  FUN=function(x) x$auc))
-mod2.fold.auc.adult <- unlist(lapply(
-  mod2.fold.roc.adult,
-  FUN=function(x) x$auc))
-
-# Model 1
-# Mean
-print(mean(mod1.fold.auc.adult))
-# SD
-print(sd(mod1.fold.auc.adult))
-
-# Model 2
-# Mean
-print(mean(mod2.fold.auc.adult))
-# SD
-print(sd(mod2.fold.auc.adult))
-```
-
-Export 
-
-```{r}
-write.csv(
-  cv.folds,
-  "output/classifier_5fold_CV.csv",
-  row.names=FALSE
-)
-```
-
-## Mean ROC curve
-
-Interpolate the ROC to calculate the mean AUC, taking inspiration from https://stats.stackexchange.com/a/187003
-
-```{r}
-# Initialize data frame for storing interpolated TPR and FPR
-mod1.roc.adult.approx <- data.frame(
-  fpr.out=seq(0, 1, length.out=100),
-  tpr1=0,
-  tpr2=0,
-  tpr3=0,
-  tpr4=0,
-  tpr5=0)
-mod2.roc.adult.approx <- mod1.roc.adult.approx
-for (k in 1:5) {
-  # Model 1
-  fpr <- rev(1-mod1.fold.roc.adult[[k]]$specificities)
-  tpr <- rev(mod1.fold.roc.adult[[k]]$sensitivities)
-  tpr.out <- approx(fpr, tpr,
-                    xout=mod1.roc.adult.approx$fpr.out,
-                    method="linear", ties="ordered")
-  mod1.roc.adult.approx[,k+1] <- tpr.out$y
-  
-  # Model 2
-  fpr <- rev(1-mod2.fold.roc.adult[[k]]$specificities)
-  tpr <- rev(mod2.fold.roc.adult[[k]]$sensitivities)
-  tpr.out <- approx(fpr, tpr,
-                    xout=mod2.roc.adult.approx$fpr.out,
-                    method="linear", ties="ordered")
-  mod2.roc.adult.approx[,k+1] <- tpr.out$y
-}
-
-# Average TPR and FPR
-mod1.roc.adult.approx$tpr.mean <- rowMeans(mod1.roc.adult.approx[,2:6])
-mod1.roc.adult.approx$tpr.sd <- apply(
-  mod1.roc.adult.approx[,2:6],
-  MARGIN=1, FUN=sd
-)
-
-mod1.roc.adult.approx[1,"tpr.mean"] <- 0 # Force the mean ROC to start at (0,0)
-plot(mod1.roc.adult.approx$fpr.out, mod1.roc.adult.approx$tpr.mean,
-     main="Model 1: FABP4 only")
-
-mod2.roc.adult.approx$tpr.mean <- rowMeans(mod2.roc.adult.approx[,2:6])
-mod2.roc.adult.approx$tpr.sd <- apply(
-  mod2.roc.adult.approx[,2:6],
-  MARGIN=1, FUN=sd
-)
-mod2.roc.adult.approx[1,"tpr.mean"] <- 0 # Force the mean ROC to start at (0,0)
-plot(mod2.roc.adult.approx$fpr.out, mod2.roc.adult.approx$tpr.mean,
-     main="Model 2: FABP4 & Versa")
-```
-
-Plot interpolated ROCs
-
-```{r}
-p <- ggplot()
-
-# Model 1
-p <- p + geom_line(
-  data=mod1.roc.adult.approx,
-  aes(x=fpr.out, y=tpr.mean),
-  col=color.fabp4, linewidth=1)
-
-# Model 2
-p <- p + geom_line(
-  data=mod2.roc.adult.approx,
-  aes(x=fpr.out, y=tpr.mean),
-  col=color.integrated, linewidth=1)
-
-# GPT-4
-p <- p + geom_line(
-  data=data.frame(
-      x=rev(1-gpt4$specificities),
-      y=rev(gpt4$sensitivities)),
-  aes(x=x, y=y),
-  col=color.gpt4, linewidth=1
-)
-
-# Add the diagonal line
-p <- p +
-  geom_segment(
-    aes(x=0,xend=1,y=0,yend=1),
-    linetype="dashed", col="grey50", linewidth=0.4)
-
-# Formatting
-p <- p +
-  labs(x="False positive rate\n(1 \u2212 specificity)",
-       y="True positive rate\n(sensitivity)") +
-  scale_x_continuous(limits=c(-0.03,1.03), expand=c(0,0)) +
-  scale_y_continuous(limits=c(-0.03,1.03), expand=c(0,0)) +
-  theme_bw() + 
-  theme(
-    plot.title = element_text(hjust = 0.5, size=12, face="plain"),
-    axis.text = element_text(size=12, color="black"),
-    text = element_text(size=12, family="Arial"),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    plot.margin = unit(c(0.3,1,0.7,0), "cm")
-  )
-p
-ggsave(
-  "output/both_mean_roc.svg",
-  plot=p,
-  width=3.55, height=3.57, units="in")
-```
-
-## Youden's index
-
-Calculate the mean and s.d. of sensitivity, specificity and accuracy at the Youden's index.
-
-```{r}
-# Convert the youden list to dataframe
-mod1.youden.df <- Reduce(rbind, mod1.youden)
-rownames(mod1.youden.df) <- 1:5
-mod2.youden.df <- Reduce(rbind, mod2.youden)
-rownames(mod2.youden.df) <- 1:5
-
-print(mod1.youden.df)
-print(mod2.youden.df)
-
-print("Sensitivity")
-# Model 1
-# Mean
-print(mean(mod1.youden.df$sensitivity))
-# SD
-print(sd(mod1.youden.df$sensitivity))
-
-# Model 2
-# Mean
-print(mean(mod2.youden.df$sensitivity))
-# SD
-print(sd(mod2.youden.df$sensitivity))
-
-print("Specificity")
-# Model 1
-# Mean
-print(mean(mod1.youden.df$specificity))
-# SD
-print(sd(mod1.youden.df$specificity))
-
-# Model 2
-# Mean
-print(mean(mod2.youden.df$specificity))
-# SD
-print(sd(mod2.youden.df$specificity))
-
-print("Accuracy")
-# Model 1
-# Mean
-print(mean(mod1.youden.df$accuracy))
-# SD
-print(sd(mod1.youden.df$accuracy))
-
-# Model 2
-# Mean
-print(mean(mod2.youden.df$accuracy))
-# SD
-print(sd(mod2.youden.df$accuracy))
-```
-
-# Compare all predictions to true diagnosis
-
-## Classifiers
+## FABP4 classifiers
 
 I will plot the confusion matrix to compare different predictions to true diagnosis
 
@@ -705,7 +681,7 @@ p.fabp4 + p.integrated + plot_layout(nrow=1)
 
 ## Naive physicians
 
-Compare naive physcians' adjudication
+Compare naive physicians' adjudication
 
 ```{r}
 temp4 <- naive %>%
@@ -723,13 +699,15 @@ temp4 <- temp4 %>%
 print(temp4)
 ```
 
+Plot
+
 ```{r}
 p.naive <- ggplot(
   data=temp4,
   aes(x=naive.pred, y=LRTI)) +
   geom_tile(aes(fill=count), color="black") +
   geom_text(aes(label=count), vjust = 0.5) +
-  labs(x="GPT-4 comparison\nphysicians diagnosis",
+  labs(x="Comparison physicians\ndiagnosis",
        y="True diagnosis") +
   scale_fill_gradient(
     low="white", high=color.naive,
@@ -749,7 +727,7 @@ Export all confusion matrices
 
 ```{r}
 ggsave(
-  "output/all_confusion_matrix.svg",
+  "./output/discovery_all_confusion_matrix.svg",
   plot=p.initial + p.fabp4 + p.naive + p.gpt4 + p.integrated + plot_spacer() + plot_layout(nrow=2),
   width=8.5, height=4.7, units="in")
 ```
@@ -771,7 +749,7 @@ p.gpt4.naive <- ggplot(
       y=as.factor(Versa.LRTI.score))) +
   geom_tile(aes(fill=count), color="black") +
   geom_text(aes(label=count), vjust = 0.5) +
-  labs(x="GPT-4 comparison\nphysicians score",
+  labs(x="Comparison physicians\nscore",
        y="GPT-4 score") +
   scale_fill_gradient(
     low="white", high="coral",
@@ -783,14 +761,9 @@ p.gpt4.naive <- ggplot(
   theme_bw() + my.theme
 p.gpt4.naive
 ggsave(
-  "output/gpt4-vs-naive.svg",
+  "./output/discovery_gpt4-vs-naive.svg",
   plot=p.gpt4.naive,
-  width=2.7, height=2.7, units="in")
+  width=3, height=3, units="in")
 ```
 
-# sessionInfo
-
-```{r}
-sessionInfo()
-```
 
