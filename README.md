@@ -29,7 +29,7 @@ The 3-fold cross-validation results of the validation cohort are available in [v
 
 ## Other folders
 
-* Folder `gene_counts`: contains the gene counts tables.
+* Folder `gene_counts`: contains the gene counts tables. Note that the `discover_counts.csv` file contains data for samples that are not analyzed (they were adjudicated to have Suspected LRTI or Indeterminate)
 
 * Folder `metadata`: contains the metadata files.
 
