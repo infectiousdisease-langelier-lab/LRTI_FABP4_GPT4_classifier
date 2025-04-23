@@ -69,129 +69,42 @@ sessionInfo
 sessionInfo()
 ```
 
-# Import data
-
-## Import count and metadata
+# Import gene counts and metadata
 
 ```{r}
 # Counts
-counts.adult <- read.csv(
+counts <- read.csv(
   "./gene_counts/discovery_counts.csv",
   row.names=1, check.names=FALSE)
 # Save gene symbol and gene ID
-gene.symbol <- counts.adult[,"gene_symbol",drop=FALSE]
+gene.symbol <- counts[,"gene_symbol",drop=FALSE]
 
 # Metadata that contains Versa score
-metadata.adult <- read.csv(
-  "./metadata/metadata_simplified.csv",
+metadata <- read.csv(
+  "./metadata/discovery_metadata_noPHI.csv",
   row.names=NULL
 )
-colnames(metadata.adult) <- gsub(" ",".", colnames(metadata.adult), fixed=TRUE)
-metadata.adult$patient_id <- as.character(metadata.adult$patient_id)
-metadata.adult$LRTI <- factor(metadata.adult$LRTI, levels=c(0,1))
+metadata$patient_id <- as.character(metadata$patient_id)
+metadata$LRTI <- factor(metadata$LRTI, levels=c(0,1))
+metadata$Clinical_LRTI <- factor(metadata$Clinical_LRTI, levels=c(0,1))
 
-# Remove excluded and prompt engineering patients
-# Remove 361 and 506 due to QC
-metadata.adult <- metadata.adult %>%
-  subset((is.na(Exclude.Patient)) | (Exclude.Patient!="Y")) %>%
-  subset(!(patient_id %in% c("205","208","211","213","439"))) %>%
-  subset(!(patient_id %in% c("361","506")))
-
-# Versa score is stored in 2 columns: 1 as character, 1 as numeric
-metadata.adult$Versa.LRTI.score.factor <- as.character(metadata.adult$Versa.LRTI.score)
-metadata.adult$Versa.LRTI.score <- as.numeric(metadata.adult$Versa.LRTI.score)
+# Verify that all patient_id in the metadata are present in the counts table
+stopifnot(all(metadata$patient_id %in% colnames(counts)))
 
 # Verify that there is no Na Versa score
-stopifnot(!is.na(metadata.adult$Versa.LRTI.score))
-stopifnot(!is.na(metadata.adult$Versa.LRTI.score.factor))
+stopifnot(all(!is.na(metadata$Versa.LRTI.score)))
 
 # Number of samples per LRTI status
-print(table(metadata.adult$LRTI))
+print(table(metadata$LRTI))
 ```
 
 Calculate Versa's accuracy vs true diagnosis
 
 ```{r}
-metadata.adult$accuracy <- ifelse(
-  metadata.adult$LRTI=="0",
-  (3-metadata.adult$Versa.LRTI.score)/3,
-  metadata.adult$Versa.LRTI.score/3)
-```
-
-## Import initial ICU diagnosis
-
-The column `Clinical_LRTI` contains the real-time clinician adjudication, based on the clinician's abx prescription.
-
-```{r}
-initial.icu <- read.csv(
-  "./metadata/initial_icu.csv",
-  row.names=NULL
-)
-
-initial.icu$patient_id <- as.character(initial.icu$patient_id)
-
-head(initial.icu)
-```
-
-Merge abx info with data file
-
-```{r}
-metadata.adult <- merge(
-  metadata.adult, initial.icu[,c("patient_id","Clinical_LRTI")],
-  by="patient_id",
-  all.x=TRUE, all.y=FALSE,
-  sort=FALSE
-)
-stopifnot(!is.na(metadata.adult$Clinical_LRTI))
-metadata.adult$Clinical_LRTI <- factor(metadata.adult$Clinical_LRTI, levels=c(0,1))
-```
-
-## Import naive physician diagnosis
-
-```{r}
-naive <- read.csv(
-  "./metadata/gpt4_comparison_physician_score.csv",
-  row.names=NULL
-)
-naive$LRTI <- as.character(naive$LRTI)
-naive$patient_id <- as.character(naive$patient_id)
-
-# Exclude patients 361 and 506 because of QC
-naive <- naive %>%
-  subset(!(patient_id %in% c("361","506")))
-```
-
-# Initial ICU vs true diagnosis
-
-```{r}
-# Number of patients per predicted and true LRTI diagnosis
-temp <- metadata.adult %>%
-  select(patient_id, LRTI, Clinical_LRTI) %>%
-  group_by(LRTI, Clinical_LRTI) %>%
-  summarise(count = n(), .groups = 'drop')
-print(temp)
-```
-
-Plot confusion matrix.
-
-```{r}
-p.initial <- ggplot(
-  data=temp,
-  aes(x=Clinical_LRTI, y=LRTI)) +
-  geom_tile(aes(fill=count), color="black") +
-  geom_text(aes(label=count), vjust = 0.5) +
-  labs(x="Initial ICU\ndiagnosis",
-       y="True diagnosis") +
-  scale_fill_gradient(
-    low="white", high=color.initial,
-    limits=c(0,38), guide="none") +
-  scale_x_discrete(
-    expand=c(0,0), limits=c("1","0"),
-    labels=c("LRTI","No LRTI"), position="top") +
-  scale_y_discrete(expand=c(0,0), labels=c("No LRTI","LRTI")) +
-  coord_fixed(ratio=1) +
-  theme_bw() + my.theme.cm
-p.initial
+metadata$accuracy <- ifelse(
+  metadata$LRTI=="0",
+  (3-metadata$Versa.LRTI.score)/3,
+  metadata$Versa.LRTI.score/3)
 ```
 
 # 5-fold CV
@@ -202,15 +115,15 @@ Here I generate 5 folds for cross-validation, trying to keep roughly the same ra
 ```{r}
 # Create the 5 folds for each LRTI group separately
 rep0 <- rep(
-  1:5, length.out=sum(metadata.adult$LRTI=="0"))
+  1:5, length.out=sum(metadata$LRTI=="0"))
 rep1 <- rep(
-  1:5, length.out=sum(metadata.adult$LRTI=="1"))
+  1:5, length.out=sum(metadata$LRTI=="1"))
 
 # Assign fold
 set.seed(0)
-cv.folds <- metadata.adult %>%
+cv.folds <- metadata %>%
   select(patient_id,
-         LRTI, Versa.LRTI.score, Versa.LRTI.score.factor) %>%
+         LRTI, Versa.LRTI.score) %>%
   mutate(fold=NA) %>%
   arrange(patient_id)
 cv.folds[cv.folds$LRTI=="0","fold"] <- sample(rep0, replace=FALSE)
@@ -262,7 +175,7 @@ for (k in c(1:5)) {
   train.folds <- cv.folds[cv.folds$fold!=k,]
   
   # Train data
-  counts.train <- counts.adult[,train.folds$patient_id]
+  counts.train <- counts[,train.folds$patient_id]
   keep.train <- rowSums(counts.train>=10) >= (0.2*ncol(counts.train))
   dds.train <- DESeqDataSetFromMatrix(
     countData = counts.train[keep.train,],
@@ -296,7 +209,7 @@ for (k in c(1:5)) {
     family="binomial")
   
   # Test data
-  counts.test <- counts.adult[,test.fold$patient_id]
+  counts.test <- counts[,test.fold$patient_id]
   dds.test <- DESeqDataSetFromMatrix(
     countData = counts.test[keep.train,],
     colData = test.fold,
@@ -562,13 +475,46 @@ print(bind_rows(mod2.youden))
 
 # Compare all predictions to true diagnosis
 
+## Initial ICU vs true diagnosis
+
+```{r}
+# Number of patients per predicted and true LRTI diagnosis
+temp <- metadata %>%
+  select(patient_id, LRTI, Clinical_LRTI) %>%
+  group_by(LRTI, Clinical_LRTI) %>%
+  summarise(count = n(), .groups = 'drop')
+print(temp)
+```
+
+Plot confusion matrix.
+
+```{r}
+p.initial <- ggplot(
+  data=temp,
+  aes(x=Clinical_LRTI, y=LRTI)) +
+  geom_tile(aes(fill=count), color="black") +
+  geom_text(aes(label=count), vjust = 0.5) +
+  labs(x="Initial ICU\ndiagnosis",
+       y="True diagnosis") +
+  scale_fill_gradient(
+    low="white", high=color.initial,
+    limits=c(0,38), guide="none") +
+  scale_x_discrete(
+    expand=c(0,0), limits=c("1","0"),
+    labels=c("LRTI","No LRTI"), position="top") +
+  scale_y_discrete(expand=c(0,0), labels=c("No LRTI","LRTI")) +
+  coord_fixed(ratio=1) +
+  theme_bw() + my.theme.cm
+p.initial
+```
+
 ## GPT-4
 
 Compare GPT-4 prediction to true diagnosis (threshold is LRTI score >=1)
 
 ```{r}
 # Number of patients per predicted and true LRTI diagnosis
-temp1 <- metadata.adult %>%
+temp1 <- metadata %>%
   select(patient_id, LRTI, Versa.LRTI.score) %>%
   mutate(gpt4.pred=as.factor(Versa.LRTI.score>=1)) %>%
   group_by(gpt4.pred, LRTI) %>%
@@ -683,7 +629,7 @@ p.fabp4 + p.integrated + plot_layout(nrow=1)
 Compare naive physicians' adjudication
 
 ```{r}
-temp4 <- naive %>%
+temp4 <- metadata %>%
   select(patient_id, LRTI, naive_LRTI_score) %>%
   mutate(naive.pred=as.factor(naive_LRTI_score>=1)) %>%
   group_by(naive.pred, LRTI) %>%
@@ -734,7 +680,7 @@ ggsave(
 # Naive vs GPT-4 diagnosis
 
 ```{r}
-temp5 <- naive %>%
+temp5 <- metadata %>%
   select(patient_id, Versa.LRTI.score, naive_LRTI_score) %>%
   group_by(Versa.LRTI.score, naive_LRTI_score) %>%
   summarise(count = n(), .groups = 'drop')
