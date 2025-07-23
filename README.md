@@ -13,6 +13,10 @@ Large language models (LLMs) such as Generative Pre-trained Transformer 4 (GPT-4
 
 We first tested our method in the discovery cohort, called mBAL. After this, we tested the method in an independent validation cohort, called COMET.
 
+## Hardware and run time
+
+The code was run on an M1 Pro Macbook with 16GB of RAM. We expect each R markdown notebook takes fewer than 5 minutes to run.
+
 ## Code
 
 All analyses were done with R v4.3.2. The analyses and figures in the manuscript could be reproduced by running the script [classifier.Rmd](classifier.Rmd).
