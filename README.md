@@ -42,13 +42,13 @@ The 3-fold cross-validation results of the validation cohort are available in [v
 ## R session info
 
 ```{R}
-R version 4.3.2 (2023-10-31)
-Platform: aarch64-apple-darwin20 (64-bit)
-Running under: macOS 15.3.1
+R version 4.5.0 (2025-04-11)
+Platform: aarch64-apple-darwin20
+Running under: macOS Sequoia 15.6
 
 Matrix products: default
 BLAS:   /System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/vecLib.framework/Versions/A/libBLAS.dylib 
-LAPACK: /Library/Frameworks/R.framework/Versions/4.3-arm64/Resources/lib/libRlapack.dylib;  LAPACK version 3.11.0
+LAPACK: /Library/Frameworks/R.framework/Versions/4.5-arm64/Resources/lib/libRlapack.dylib;  LAPACK version 3.12.1
 
 locale:
 [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
@@ -60,26 +60,19 @@ attached base packages:
 [1] stats4    stats     graphics  grDevices utils     datasets  methods   base     
 
 other attached packages:
- [1] pROC_1.18.5                 DESeq2_1.42.1               SummarizedExperiment_1.32.0
- [4] Biobase_2.62.0              MatrixGenerics_1.14.0       matrixStats_1.3.0          
- [7] GenomicRanges_1.54.1        GenomeInfoDb_1.38.8         IRanges_2.36.0             
-[10] S4Vectors_0.40.2            BiocGenerics_0.48.1         patchwork_1.2.0            
-[13] lubridate_1.9.3             forcats_1.0.0               stringr_1.5.1              
-[16] dplyr_1.1.4                 purrr_1.0.2                 readr_2.1.5                
-[19] tidyr_1.3.1                 tibble_3.2.1                ggplot2_3.5.1              
-[22] tidyverse_2.0.0            
+ [1] pROC_1.19.0.1               DESeq2_1.48.1               SummarizedExperiment_1.38.1 Biobase_2.68.0              MatrixGenerics_1.20.0       matrixStats_1.5.0          
+ [7] GenomicRanges_1.60.0        GenomeInfoDb_1.44.1         IRanges_2.42.0              S4Vectors_0.46.0            BiocGenerics_0.54.0         generics_0.1.4             
+[13] patchwork_1.3.1             lubridate_1.9.4             forcats_1.0.0               stringr_1.5.1               dplyr_1.1.4                 purrr_1.1.0                
+[19] readr_2.1.5                 tidyr_1.3.1                 tibble_3.3.0                ggplot2_3.5.2               tidyverse_2.0.0            
 
 loaded via a namespace (and not attached):
- [1] gtable_0.3.5            xfun_0.44               lattice_0.22-6          tzdb_0.4.0             
- [5] vctrs_0.6.5             tools_4.3.2             bitops_1.0-7            generics_0.1.3         
- [9] parallel_4.3.2          fansi_1.0.6             pkgconfig_2.0.3         Matrix_1.6-5           
-[13] lifecycle_1.0.4         GenomeInfoDbData_1.2.11 compiler_4.3.2          munsell_0.5.1          
-[17] codetools_0.2-20        RCurl_1.98-1.14         pillar_1.9.0            crayon_1.5.2           
-[21] BiocParallel_1.36.0     DelayedArray_0.28.0     abind_1.4-5             tidyselect_1.2.1       
-[25] locfit_1.5-9.9          stringi_1.8.4           grid_4.3.2              colorspace_2.1-0       
-[29] cli_3.6.2               SparseArray_1.2.4       magrittr_2.0.3          S4Arrays_1.2.1         
-[33] utf8_1.2.4              withr_3.0.0             scales_1.3.0            timechange_0.3.0       
-[37] XVector_0.42.0          hms_1.1.3               knitr_1.47              rlang_1.1.4            
-[41] Rcpp_1.0.12             glue_1.7.0              rstudioapi_0.16.0       plyr_1.8.9             
-[45] R6_2.5.1                zlibbioc_1.48.2       
+ [1] gtable_0.3.6            bslib_0.9.0             xfun_0.52               lattice_0.22-7          tzdb_0.5.0              vctrs_0.6.5             tools_4.5.0            
+ [8] parallel_4.5.0          pkgconfig_2.0.3         Matrix_1.7-3            RColorBrewer_1.1-3      lifecycle_1.0.4         GenomeInfoDbData_1.2.14 compiler_4.5.0         
+[15] farver_2.1.2            textshaping_1.0.1       codetools_0.2-20        sass_0.4.10             htmltools_0.5.8.1       yaml_2.3.10             jquerylib_0.1.4        
+[22] pillar_1.11.0           crayon_1.5.3            BiocParallel_1.42.1     cachem_1.1.0            DelayedArray_0.34.1     abind_1.4-8             digest_0.6.37          
+[29] tidyselect_1.2.1        locfit_1.5-9.12         stringi_1.8.7           labeling_0.4.3          fastmap_1.2.0           grid_4.5.0              cli_3.6.5              
+[36] SparseArray_1.8.1       magrittr_2.0.3          S4Arrays_1.8.1          withr_3.0.2             scales_1.4.0            UCSC.utils_1.4.0        timechange_0.3.0       
+[43] rmarkdown_2.29          XVector_0.48.0          httr_1.4.7              ragg_1.4.0              hms_1.1.3               evaluate_1.0.4          knitr_1.50             
+[50] rlang_1.1.6             Rcpp_1.1.0              glue_1.8.0              svglite_2.2.1           rstudioapi_0.17.1       jsonlite_2.0.0          R6_2.6.1               
+[57] systemfonts_1.2.3      
 ```

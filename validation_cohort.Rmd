@@ -1,5 +1,5 @@
 ---
-title: "FABP4-Versa_classifier"
+title: "FABP4/GPT-4 classifier - Validation cohort"
 output: html_notebook
 ---
 
@@ -14,7 +14,7 @@ LRTI score (between 0 and 3) to a logistic regression model.
 ```{r}
 library(tidyverse)
 library(ggplot2)
-library(ggalluvial)
+# library(ggalluvial)
 library(patchwork)
 
 # library(limma)
@@ -86,64 +86,17 @@ metadata$LRTI <- ifelse(
 metadata$LRTI <- as.factor(metadata$LRTI)
 ```
 
-Remove excluded patients
+Count the number of patients per LRTI status
 
 ```{r}
-metadata <- metadata %>%
-  subset(!is.na(Versa.LRTI.score))
-
-# Number of samples per LRTI status
 print(table(metadata$LRTI))
 ```
 
-## QC on the count
+Verify that the total counts per patient is at least 1 million
 
 ```{r}
-counts <- counts[,metadata$StudyID]
-stopifnot(colnames(counts) == metadata$StudyID)
+stopifnot(min(colSums(counts))>=1e6)
 ```
-
-Plot the total gene counts and number of genes per patient
-
-```{r}
-hist(colSums(counts), main="Total gene counts", breaks=10)
-```
-
-Number of detected genes
-
-```{r}
-hist(colSums(counts>0), main="Number of detected genes", breaks=10)
-```
-
-Other statistics
-
-```{r}
-# Minimum gene counts
-print(min(colSums(counts)))
-
-# Number of patients below 1e6 counts
-print(sum(colSums(counts)<1e6))
-```
-
-Filter out patients with below 1e6 counts
-
-```{r}
-counts.qc <- counts[,colSums(counts)>=1e6]
-
-hist(colSums(counts.qc>0), main="Number of detected genes after filtering", breaks=10)
-```
-
-Filter the metadata file
-
-```{r}
-metadata.qc <- metadata[match(colnames(counts.qc),metadata$StudyID),]
-stopifnot(colnames(counts.qc)==metadata.qc$StudyID)
-```
-
-```{r}
-print(table(metadata.qc$LRTI))
-```
-
 
 # Explore GPT-4 vs true diagnosis
 
@@ -163,13 +116,13 @@ Here I generate 5 folds for cross-validation, trying to keep roughly the same ra
 ```{r}
 # Create the 5 folds for each LRTI group separately
 rep0 <- rep(
-  1:3, length.out=sum(metadata.qc$LRTI=="0"))
+  1:3, length.out=sum(metadata$LRTI=="0"))
 rep1 <- rep(
-  1:3, length.out=sum(metadata.qc$LRTI=="1"))
+  1:3, length.out=sum(metadata$LRTI=="1"))
 
 # Assign fold
 set.seed(0)
-cv.folds <- metadata.qc %>%
+cv.folds <- metadata %>%
   select(StudyID, LRTI, Versa.LRTI.score) %>%
   mutate(fold=NA) %>%
   arrange(StudyID)
@@ -221,7 +174,7 @@ for (k in c(1:3)) {
   train.folds <- cv.folds[cv.folds$fold!=k,]
   
   # Train data
-  counts.train <- counts.qc[,train.folds$StudyID]
+  counts.train <- counts[,train.folds$StudyID]
   keep.train <- rowSums(counts.train>=10) >= (0.2*ncol(counts.train))
   dds.train <- DESeqDataSetFromMatrix(
     countData = counts.train[keep.train,],
@@ -255,7 +208,7 @@ for (k in c(1:3)) {
     family="binomial")
   
   # Test data
-  counts.test <- counts.qc[,test.fold$StudyID]
+  counts.test <- counts[,test.fold$StudyID]
   dds.test <- DESeqDataSetFromMatrix(
     countData = counts.test[keep.train,],
     colData = test.fold,
@@ -534,7 +487,7 @@ print(bind_rows(mod2.youden))
 
 ```{r}
 # Number of patients per predicted and true LRTI diagnosis
-temp1 <- metadata.qc %>%
+temp1 <- metadata %>%
   select(StudyID, LRTI, Clinical_LRTI) %>%
   group_by(Clinical_LRTI, LRTI) %>%
   summarise(count = n(), .groups = 'drop')
@@ -569,7 +522,7 @@ Compare GPT-4 prediction to true diagnosis (threshold is LRTI score >=1)
 
 ```{r}
 # Number of patients per predicted and true LRTI diagnosis
-temp1 <- metadata.qc %>%
+temp1 <- metadata %>%
   select(StudyID, LRTI, Versa.LRTI.score) %>%
   mutate(gpt4.pred=as.factor(Versa.LRTI.score>=1)) %>%
   group_by(gpt4.pred, LRTI) %>%
