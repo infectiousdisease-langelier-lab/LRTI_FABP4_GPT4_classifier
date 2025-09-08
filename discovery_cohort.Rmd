@@ -508,6 +508,22 @@ p.initial <- ggplot(
 p.initial
 ```
 
+Calculate the number of No LRTI true diagnosis patients who were prescribed antibiotics,
+and how many of them were predicted by the integrated classifier not to have LRTI
+
+```{r}
+metadata %>%
+  select(patient_id, LRTI, Clinical_LRTI) %>%
+  inner_join(
+    cv.folds %>% select(patient_id, mod2.prob),
+    by="patient_id"
+  ) %>%
+  filter(LRTI=="0", Clinical_LRTI=="1") %>%
+  group_by(as.factor(mod2.prob<0.5)) %>%
+  summarise(count=n()) %>%
+  print()
+```
+
 ## GPT-4
 
 Compare GPT-4 prediction to true diagnosis (threshold is LRTI score >=1)
