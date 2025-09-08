@@ -3,7 +3,7 @@
 Authors: Hoang Van Phan&dagger;, Natasha Spottiswoode&dagger;, Emily C. Lydon, Victoria T. Chu, Adolfo Cuesta, Alexander D. Kazberouk, Natalie L. Richmond, Carolyn S. Calfee, Charles R. Langelier<br>
 &dagger;equal contribution<br>
 
-Preprint: https://www.medrxiv.org/content/10.1101/2024.08.28.24312732v1 (older version of the manuscript)
+Preprint: https://www.medrxiv.org/content/10.1101/2024.08.28.24312732v2
 
 ## Introduction
 
@@ -33,7 +33,7 @@ The 3-fold cross-validation results of the validation cohort are available in [v
 
 ## Other folders
 
-* Folder `gene_counts`: contains the gene counts tables. Note that the `discover_counts.csv` file contains data for samples that are not analyzed (they were adjudicated to have Suspected LRTI or Indeterminate)
+* Folder `gene_counts`: contains the gene counts tables of the two cohorts.
 
 * Folder `metadata`: contains the metadata files.
 
